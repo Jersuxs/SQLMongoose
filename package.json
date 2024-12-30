@@ -25,10 +25,26 @@
     "schema",
     "model",
     "orm",
-    "database"
+    "database",
+    "mongoose",
+    "mongoose-like",
+    "mongoose-schema",
+    "mongoose-model",
+    "mongoose-orm",
+    "mongoose-database",
+    "sqlite-mongoose",
+    "sql"
   ],
   "author": "Jersuxs (https://discord.gg/hzWuQH869R)",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Jersuxs/SQLMongoose.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Jersuxs/SQLMongoose/issues"
+  },
+  "homepage": "https://github.com/Jersuxs/SQLMongoose",
   "dependencies": {
     "sqlite3": "^5.1.7"
   },

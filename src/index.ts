@@ -1,52 +1,57 @@
 import { Database } from 'sqlite3';
-export { Schema } from './Schema';
-export { Model } from './Model';
+import { Schema } from './Schema';
+import { Model } from './Model';
 
-export class Connection {
-  private db: Database;
+class SQLMongoose {
+  private static instance: SQLMongoose;
+  private db: Database | null = null;
+  private models: Map<string, any> = new Map();
 
-  constructor(path: string) {
-    this.db = new Database(path);
+  private constructor() {}
+
+  static getInstance(): SQLMongoose {
+    if (!SQLMongoose.instance) {
+      SQLMongoose.instance = new SQLMongoose();
+    }
+    return SQLMongoose.instance;
   }
 
-  async transaction<T>(callback: (db: Database) => Promise<T>): Promise<T> {
+  connect(path: string): Promise<void> {
     return new Promise((resolve, reject) => {
-      this.db.serialize(() => {
-        this.db.run('BEGIN TRANSACTION');
-        
-        callback(this.db)
-          .then((result) => {
-            this.db.run('COMMIT', (err) => {
-              if (err) {
-                this.db.run('ROLLBACK');
-                reject(err);
-              } else {
-                resolve(result);
-              }
-            });
-          })
-          .catch((err) => {
-            this.db.run('ROLLBACK');
-            reject(err);
-          });
-      });
-    });
-  }
-
-  getDatabase(): Database {
-    return this.db;
-  }
-
-  close(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.db.close((err) => {
+      this.db = new Database(path, (err) => {
         if (err) reject(err);
         else resolve();
       });
     });
   }
+
+  model<T extends object>(name: string, schema?: Schema): any {
+    if (schema) {
+      if (!this.db) throw new Error('Database not connected');
+      const model = new Model<T>(this.db, name.toLowerCase(), schema);
+      this.models.set(name, model);
+      return model;
+    }
+    return this.models.get(name);
+  }
+
+  getConnection(): Database {
+    if (!this.db) throw new Error('Database not connected');
+    return this.db;
+  }
+
+  async disconnect(): Promise<void> {
+    if (this.db) {
+      await new Promise((resolve, reject) => {
+        this.db!.close((err) => {
+          if (err) reject(err);
+          else resolve(true);
+        });
+      });
+      this.db = null;
+    }
+  }
 }
 
-export function createConnection(path: string): Connection {
-  return new Connection(path);
-}
+const sqlmongoose = SQLMongoose.getInstance();
+export { Schema, sqlmongoose as default };

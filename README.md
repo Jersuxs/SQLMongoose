@@ -1,6 +1,6 @@
-# SQLite Schemas
+# SQLMongoose
 
-A powerful and intuitive ORM for SQLite3 that brings Mongoose-like schemas and models to your SQLite database.
+A SQLite ORM that works exactly like Mongoose, bringing the familiar MongoDB/Mongoose syntax to SQLite.
 Support server: https://discord.gg/hzWuQH869R
 
 ## Features
@@ -21,52 +21,254 @@ Support server: https://discord.gg/hzWuQH869R
 ## Installation
 
 ```bash
-npm install sqlite-schemas
+npm install sqlmongoose
 ```
 
 ## Quick Start
 
-```typescript
-import { createConnection, Schema, Model } from 'sqlite-schemas';
+```javascript
+const sqlmongoose = require('sqlmongoose');
 
-// Create database connection
-const db = createConnection('example.db');
+// Connect to database
+await sqlmongoose.connect('database.db');
 
-// Define your schema
+// Define Schema
 const userSchema = new Schema({
   name: { type: 'STRING', required: true },
-  age: { type: 'NUMBER', required: true },
-  active: { type: 'BOOLEAN', default: true },
-  createdAt: { type: 'DATE', default: new Date() }
+  email: { type: 'STRING', unique: true },
+  balance: { type: 'NUMBER', default: 0 },
+  isActive: { type: 'BOOLEAN', default: true },
+  lastLogin: { type: 'DATE' }
 });
 
-// Create a model
-interface User {
-  id?: number;
-  name: string;
-  age: number;
-  active: boolean;
-  createdAt: Date;
-}
+// Create Model
+const User = sqlmongoose.model('User', userSchema);
 
-const UserModel = new Model<User>(db, 'users', userSchema);
+// Use it like Mongoose!
+const user = await User.create({
+  name: 'John',
+  email: 'john@example.com'
+});
+```
 
-// Usage examples
-async function example() {
-  // Create a new user
-  const user = await UserModel.create({
-    name: 'John Doe',
-    age: 25,
-    active: true,
-    createdAt: new Date()
+## Defining Schemas
+
+```javascript
+const economySchema = new Schema({
+  userId: {
+    type: 'STRING',
+    required: true,
+    unique: true
+  },
+  money: {
+    type: 'NUMBER',
+    default: 0,
+    validate: value => value >= 0
+  },
+  inventory: {
+    type: 'STRING', // Stored as JSON
+    default: JSON.stringify({
+      items: [],
+      lastUpdated: new Date()
+    })
+  }
+});
+
+// Pre-save hook example
+economySchema.pre('save', async function(data) {
+  if (typeof data.inventory === 'object') {
+    data.inventory = JSON.stringify(data.inventory);
+  }
+});
+
+// Post-save hook example
+economySchema.post('save', async function(data) {
+  if (typeof data.inventory === 'string') {
+    data.inventory = JSON.parse(data.inventory);
+  }
+});
+
+// Create and export model
+const Economy = sqlmongoose.model('Economy', economySchema);
+module.exports = Economy;
+```
+
+## Using Models
+
+### Creating Documents
+```javascript
+// In your command file
+const Economy = sqlmongoose.model('Economy');
+
+async function createUser(userId) {
+  const economy = await Economy.create({
+    userId: userId,
+    money: 1000 // Starting balance
   });
-
-  // Find all users
-  const allUsers = await UserModel.find();
-
-  // Find one user
-  const john = await UserModel.findOne({ name: 'John Doe' });
+  return economy;
 }
+```
+
+### Finding Documents
+```javascript
+// Find one
+const user = await Economy.findOne({ userId: '123' });
+
+// Find many with conditions
+const richUsers = await Economy.find({
+  money: { gt: 10000 }
+}, {
+  limit: 10,
+  orderBy: { money: 'DESC' }
+});
+
+// Advanced queries
+const users = await Economy.find({
+  money: { gt: 1000, lte: 5000 },
+  lastLogin: { gt: new Date('2024-01-01') },
+  name: { like: 'John' }
+});
+```
+
+### Updating Documents
+```javascript
+// Regular update
+await Economy.update(
+  { userId: '123' },
+  { money: 5000 }
+);
+
+// Using operators like Mongoose
+await Economy.update(
+  { userId: '123' },
+  { $inc: { money: 100 } }
+);
+
+// Multiple operators
+await Economy.update(
+  { userId: '123' },
+  {
+    $inc: { money: -50 },
+    $set: { lastTransaction: new Date() }
+  }
+);
+```
+
+### Using in Discord.js Commands
+```javascript
+const { SlashCommandBuilder } = require('discord.js');
+const Economy = require('../schemas/EconomySchema');
+
+module.exports = {
+  data: new SlashCommandBuilder()
+    .setName('balance')
+    .setDescription('Check your balance'),
+
+  async execute(interaction) {
+    let user = await Economy.findOne({ 
+      userId: interaction.user.id 
+    });
+
+    if (!user) {
+      user = await Economy.create({
+        userId: interaction.user.id,
+        money: 1000, // Starting money
+        bank: 0
+      });
+    }
+
+    await interaction.reply(
+      `Balance: ${user.money}\nBank: ${user.bank}`
+    );
+  }
+};
+```
+
+## Transactions
+```javascript
+const sqlmongoose = require('sqlmongoose');
+
+async function transferMoney(fromId, toId, amount) {
+  await sqlmongoose.transaction(async () => {
+    const [from, to] = await Promise.all([
+      Economy.findOne({ userId: fromId }),
+      Economy.findOne({ userId: toId })
+    ]);
+
+    if (from.money < amount) {
+      throw new Error('Insufficient funds');
+    }
+
+    await Economy.update(
+      { userId: fromId },
+      { $inc: { money: -amount } }
+    );
+
+    await Economy.update(
+      { userId: toId },
+      { $inc: { money: amount } }
+    );
+  });
+}
+```
+
+## Update Operators
+
+SQLMongoose supports these MongoDB-like operators:
+
+```javascript
+// $inc - Increment/decrement
+await Economy.update(
+  { userId },
+  { $inc: { money: 100, xp: 50 } }
+);
+
+// $set - Set values
+await Economy.update(
+  { userId },
+  { $set: { lastLogin: new Date() } }
+);
+
+// $unset - Remove fields
+await Economy.update(
+  { userId },
+  { $unset: { temporaryBuff: 1 } }
+);
+```
+
+## Query Operators
+
+```javascript
+// Comparison
+eq: Equal
+ne: Not Equal
+gt: Greater Than
+gte: Greater Than or Equal
+lt: Less Than
+lte: Less Than or Equal
+in: In Array
+like: Like (SQL LIKE)
+
+// Examples
+await Economy.find({
+  level: { gte: 10 },
+  name: { like: 'John%' },
+  status: { in: ['active', 'premium'] }
+});
+```
+
+## TypeScript Support
+
+```typescript
+interface UserDocument {
+  id?: number;
+  userId: string;
+  money: number;
+  bank: number;
+  inventory: string;
+}
+
+const User = sqlmongoose.model<UserDocument>('User', userSchema);
 ```
 
 ## Schema Types
@@ -321,6 +523,265 @@ async function userExample() {
   
   // Find specific user
   const john = await UserModel.findOne({ email: 'john@example.com' });
+}
+```
+
+## JavaScript Examples
+
+### Basic Setup
+```javascript
+// index.js
+const sqlmongoose = require('sqlmongoose');
+
+async function init() {
+  await sqlmongoose.connect('database.db');
+  require('./schemas/UserSchema');
+  require('./schemas/EconomySchema');
+}
+
+init().catch(console.error);
+```
+
+### Schema Definition
+```javascript
+// schemas/EconomySchema.js
+const sqlmongoose = require('sqlmongoose');
+const { Schema } = sqlmongoose;
+
+const economySchema = new Schema({
+  userId: {
+    type: 'STRING',
+    required: true,
+    unique: true
+  },
+  money: {
+    type: 'NUMBER',
+    default: 0,
+    validate: value => value >= 0
+  },
+  bank: {
+    type: 'NUMBER',
+    default: 0
+  },
+  inventory: {
+    type: 'STRING',
+    default: JSON.stringify({
+      items: [],
+      lastUpdated: new Date()
+    })
+  },
+  dailyStreak: {
+    type: 'NUMBER',
+    default: 0
+  },
+  lastDaily: {
+    type: 'DATE',
+    default: null
+  }
+});
+
+// Hooks example
+economySchema.pre('save', async function(data) {
+  // Convert objects to JSON strings
+  if (typeof data.inventory === 'object') {
+    data.inventory = JSON.stringify(data.inventory);
+  }
+});
+
+economySchema.post('save', async function(data) {
+  // Parse JSON strings back to objects
+  if (typeof data.inventory === 'string') {
+    data.inventory = JSON.parse(data.inventory);
+  }
+});
+
+module.exports = sqlmongoose.model('Economy', economySchema);
+```
+
+### Using in Commands (Discord.js Example)
+```javascript
+// commands/balance.js
+const { SlashCommandBuilder } = require('discord.js');
+const Economy = require('../schemas/EconomySchema');
+
+module.exports = {
+  data: new SlashCommandBuilder()
+    .setName('balance')
+    .setDescription('Check your or someone else\'s balance')
+    .addUserOption(option => 
+      option.setName('user')
+        .setDescription('User to check')
+        .setRequired(false)),
+
+  async execute(interaction) {
+    const target = interaction.options.getUser('user') || interaction.user;
+    
+    let userData = await Economy.findOne({ userId: target.id });
+    
+    if (!userData) {
+      userData = await Economy.create({
+        userId: target.id,
+        money: 1000, // Starting money
+        bank: 0
+      });
+    }
+
+    const embed = {
+      title: `💰 ${target.username}'s Balance`,
+      fields: [
+        { name: 'Cash', value: `$${userData.money}`, inline: true },
+        { name: 'Bank', value: `$${userData.bank}`, inline: true },
+        { name: 'Total', value: `$${userData.money + userData.bank}` }
+      ],
+      color: 0x0099FF
+    };
+
+    await interaction.reply({ embeds: [embed] });
+  }
+};
+
+// commands/daily.js
+const Economy = require('../schemas/EconomySchema');
+const ONE_DAY = 24 * 60 * 60 * 1000;
+
+module.exports = {
+  data: new SlashCommandBuilder()
+    .setName('daily')
+    .setDescription('Collect your daily reward'),
+
+  async execute(interaction) {
+    const user = await Economy.findOne({ userId: interaction.user.id });
+    const now = new Date();
+    
+    if (user.lastDaily && (now - new Date(user.lastDaily)) < ONE_DAY) {
+      const timeLeft = ONE_DAY - (now - new Date(user.lastDaily));
+      const hoursLeft = Math.floor(timeLeft / (60 * 60 * 1000));
+      return interaction.reply(
+        `You can collect your daily reward in ${hoursLeft} hours!`
+      );
+    }
+
+    const reward = 100 * (user.dailyStreak + 1);
+    
+    await Economy.update(
+      { userId: interaction.user.id },
+      { 
+        $inc: { 
+          money: reward,
+          dailyStreak: 1
+        },
+        $set: { lastDaily: now }
+      }
+    );
+
+    await interaction.reply(
+      `You collected $${reward}! 🎉\nDaily streak: ${user.dailyStreak + 1}`
+    );
+  }
+};
+```
+
+### Advanced Examples
+
+#### Economy System
+```javascript
+// economy/transactions.js
+const Economy = require('../schemas/EconomySchema');
+
+async function transfer(fromId, toId, amount) {
+  return await sqlmongoose.transaction(async () => {
+    const [from, to] = await Promise.all([
+      Economy.findOne({ userId: fromId }),
+      Economy.findOne({ userId: toId })
+    ]);
+
+    if (!from || !to) throw new Error('User not found');
+    if (from.money < amount) throw new Error('Insufficient funds');
+
+    await Promise.all([
+      Economy.update(
+        { userId: fromId },
+        { $inc: { money: -amount } }
+      ),
+      Economy.update(
+        { userId: toId },
+        { $inc: { money: amount } }
+      )
+    ]);
+
+    return { from, to, amount };
+  });
+}
+
+async function addItem(userId, item) {
+  const user = await Economy.findOne({ userId });
+  const inventory = JSON.parse(user.inventory);
+  
+  inventory.items.push({
+    ...item,
+    obtainedAt: new Date()
+  });
+
+  await Economy.update(
+    { userId },
+    { 
+      $set: { 
+        inventory: JSON.stringify(inventory)
+      }
+    }
+  );
+}
+
+// economy/shop.js
+async function buyItem(userId, itemId) {
+  const user = await Economy.findOne({ userId });
+  const item = SHOP_ITEMS[itemId];
+
+  if (!item) throw new Error('Item not found');
+  if (user.money < item.price) throw new Error('Insufficient funds');
+
+  await Economy.update(
+    { userId },
+    { $inc: { money: -item.price } }
+  );
+
+  await addItem(userId, item);
+  return item;
+}
+```
+
+#### Advanced Queries
+```javascript
+// queries/leaderboard.js
+async function getLeaderboard() {
+  return await Economy.find(
+    { 
+      money: { gt: 0 },
+      lastDaily: { 
+        gt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) 
+      }
+    },
+    {
+      orderBy: { money: 'DESC' },
+      limit: 10
+    }
+  );
+}
+
+async function getActiveUsers() {
+  return await Economy.find({
+    lastDaily: { gt: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+    money: { gt: 1000 }
+  });
+}
+
+async function searchUsers(query) {
+  return await Economy.find({
+    $or: [
+      { username: { like: `%${query}%` } },
+      { userId: { eq: query } }
+    ]
+  });
 }
 ```
 

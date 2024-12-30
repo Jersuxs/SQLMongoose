@@ -9,6 +9,12 @@ interface QueryCondition {
   };
 }
 
+interface UpdateOperators {
+  $inc?: { [key: string]: number };
+  $set?: { [key: string]: any };
+  $unset?: { [key: string]: any };
+}
+
 export class Model<T extends object> {
   private db: Database;
   private tableName: string;
@@ -105,21 +111,44 @@ export class Model<T extends object> {
     });
   }
 
-  async update(query: Partial<T>, update: Partial<T>): Promise<number> {
+  async update(query: Partial<T>, update: UpdateOperators | Partial<T>): Promise<number> {
     for (const hook of this.schema['hooks'].preUpdate) {
       await hook(update);
     }
 
-    const setClause = Object.keys(update)
-      .map(key => `${key} = ?`)
-      .join(', ');
+    let setClause: string[] = [];
+    let values: any[] = [];
+
+    if (this.isUpdateOperator(update)) {
+      if (update.$inc) {
+        Object.entries(update.$inc).forEach(([key, value]) => {
+          setClause.push(`${key} = ${key} + ?`);
+          values.push(value);
+        });
+      }
+      if (update.$set) {
+        Object.entries(update.$set).forEach(([key, value]) => {
+          setClause.push(`${key} = ?`);
+          values.push(value);
+        });
+      }
+      if (update.$unset) {
+        Object.entries(update.$unset).forEach(([key]) => {
+          setClause.push(`${key} = NULL`);
+        });
+      }
+    } else {
+      setClause = Object.keys(update).map(key => `${key} = ?`);
+      values = Object.values(update);
+    }
+
     const whereClause = Object.keys(query)
       .map(key => `${key} = ?`)
       .join(' AND ');
     
-    const values = [...Object.values(update), ...Object.values(query)];
+    values.push(...Object.values(query));
     
-    const sql = `UPDATE ${this.tableName} SET ${setClause} WHERE ${whereClause}`;
+    const sql = `UPDATE ${this.tableName} SET ${setClause.join(', ')} WHERE ${whereClause}`;
 
     return new Promise((resolve, reject) => {
       this.db.run(sql, values, function(err) {
@@ -127,6 +156,12 @@ export class Model<T extends object> {
         resolve(this.changes);
       });
     });
+  }
+
+  private isUpdateOperator(update: any): update is UpdateOperators {
+    return update.$inc !== undefined || 
+           update.$set !== undefined || 
+           update.$unset !== undefined;
   }
 
   async delete(query: Partial<T>): Promise<number> {
