@@ -1,17 +1,25 @@
-type SchemaType = 'STRING' | 'NUMBER' | 'BOOLEAN' | 'DATE';
+type SchemaType = 'String' | 'Number' | 'Boolean' | 'Date' | 'Array' | 'Map' | 'Mixed';
 
 interface SchemaField {
-  type: SchemaType;
+  type: SchemaType | SchemaField[];
   required?: boolean;
-  default?: any;
-  validate?: (value: any) => boolean | Promise<boolean>;
-  index?: boolean;
   unique?: boolean;
-  ref?: string; // For relationships
+  default?: any;
+  of?: SchemaField | SchemaType;
+  validate?: (value: any) => Promise<boolean> | boolean;
+  ref?: string;
+  index?: boolean;
 }
 
+interface ArraySchemaField extends SchemaField {
+  type: 'Array';
+  of: SchemaField | SchemaType;
+}
+
+type NormalizedSchemaField = SchemaField | ArraySchemaField;
+
 interface SchemaDefinition {
-  [key: string]: SchemaField;
+  [key: string]: SchemaField | SchemaType | SchemaField[];
 }
 
 export class Schema {
@@ -24,13 +32,29 @@ export class Schema {
   };
 
   constructor(definition: SchemaDefinition) {
-    this.definition = definition;
+    this.definition = this.normalizeDefinition(definition);
     this.hooks = {
       preSave: [],
       postSave: [],
       preUpdate: [],
       postUpdate: []
     };
+  }
+
+  private normalizeDefinition(definition: SchemaDefinition): SchemaDefinition {
+    const normalized: SchemaDefinition = {};
+    
+    for (const [key, value] of Object.entries(definition)) {
+      if (typeof value === 'string') {
+        normalized[key] = { type: value as SchemaType };
+      } else if (Array.isArray(value)) {
+        normalized[key] = { type: 'Array', of: value[0] };
+      } else {
+        normalized[key] = value as SchemaField;
+      }
+    }
+
+    return normalized;
   }
 
   public pre(hook: 'save' | 'update', fn: Function) {
@@ -45,10 +69,11 @@ export class Schema {
 
   public async runValidation(data: any): Promise<boolean> {
     for (const [field, config] of Object.entries(this.definition)) {
-      if (config.required && !data[field]) {
+      const fieldConfig = config as SchemaField;
+      if (fieldConfig.required && !data[field]) {
         throw new Error(`Field ${field} is required`);
       }
-      if (config.validate && !await config.validate(data[field])) {
+      if (fieldConfig.validate && !await fieldConfig.validate(data[field])) {
         throw new Error(`Validation failed for field ${field}`);
       }
     }
@@ -58,11 +83,12 @@ export class Schema {
   public createTable(tableName: string): string[] {
     const queries: string[] = [];
     
-    // Main table creation
+    // Convert schema types to SQLite types
     const columns = Object.entries(this.definition).map(([fieldName, field]) => {
-      const type = this.getSqliteType(field.type);
-      const required = field.required ? 'NOT NULL' : 'NULL';
-      const unique = field.unique ? 'UNIQUE' : '';
+      const fieldConfig = typeof field === 'string' ? { type: field } : (Array.isArray(field) ? { type: 'Array', of: field[0] } : field) as SchemaField;
+      const type = this.getSqliteType(fieldConfig.type as SchemaType);
+      const required = fieldConfig.required ? 'NOT NULL' : 'NULL';
+      const unique = fieldConfig.unique ? 'UNIQUE' : '';
       return `${fieldName} ${type} ${required} ${unique}`.trim();
     });
 
@@ -73,9 +99,10 @@ export class Schema {
 
     // Create indexes
     Object.entries(this.definition).forEach(([fieldName, field]) => {
-      if (field.index || field.unique) {
+      const fieldConfig = typeof field === 'string' ? { type: field } : (Array.isArray(field) ? { type: 'Array', of: field[0] } : field) as SchemaField;
+      if (fieldConfig.index || fieldConfig.unique) {
         queries.push(
-          `CREATE ${field.unique ? 'UNIQUE ' : ''}INDEX IF NOT EXISTS 
+          `CREATE ${fieldConfig.unique ? 'UNIQUE ' : ''}INDEX IF NOT EXISTS 
           idx_${tableName}_${fieldName} ON ${tableName}(${fieldName})`
         );
       }
@@ -86,10 +113,14 @@ export class Schema {
 
   private getSqliteType(type: SchemaType): string {
     switch (type) {
-      case 'STRING': return 'TEXT';
-      case 'NUMBER': return 'NUMERIC';
-      case 'BOOLEAN': return 'INTEGER';
-      case 'DATE': return 'TEXT';
+      case 'String': return 'TEXT';
+      case 'Number': return 'NUMERIC';
+      case 'Boolean': return 'INTEGER';
+      case 'Date': return 'TEXT';
+      case 'Array':
+      case 'Map':
+      case 'Mixed':
+        return 'TEXT'; // Stored as JSON
       default: return 'TEXT';
     }
   }
@@ -97,7 +128,7 @@ export class Schema {
   public getRelationships(): { [key: string]: string } {
     const relationships: { [key: string]: string } = {};
     Object.entries(this.definition).forEach(([field, config]) => {
-      if (config.ref) {
+      if (typeof config === 'object' && !Array.isArray(config) && 'ref' in config && config.ref) {
         relationships[field] = config.ref;
       }
     });

@@ -1,7 +1,7 @@
 # SQLMongoose
 
-A SQLite ORM that works exactly like Mongoose, bringing the familiar MongoDB/Mongoose syntax to SQLite.
-Support server: https://discord.gg/hzWuQH869R
+A SQLite ORM that works like Mongoose, bringing MongoDB/Mongoose syntax to SQLite.
+Join our community: https://discord.gg/hzWuQH869R
 
 ## Features
 
