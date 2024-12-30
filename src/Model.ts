@@ -97,6 +97,12 @@ export class Model<T extends object> {
   }
 
   async create(data: T): Promise<T> {
+    await this.schema.runValidation(data);
+    
+    for (const hook of this.schema['hooks'].preSave) {
+      await hook(data);
+    }
+
     const keys = Object.keys(data);
     const values = Object.values(data);
     const placeholders = new Array(keys.length).fill('?').join(',');
@@ -104,9 +110,17 @@ export class Model<T extends object> {
     const sql = `INSERT INTO ${this.tableName} (${keys.join(',')}) VALUES (${placeholders})`;
 
     return new Promise((resolve, reject) => {
-      this.db.run(sql, values, function(err) {
-        if (err) reject(err);
-        resolve({ ...data, id: this.lastID });
+      this.db.run(sql, values, function(this: any, err: Error | null) {
+        if (err) {
+          reject(err);
+        } else {
+          const createdData = { ...data, id: this.lastID } as T;
+          
+          // Execute post-save hooks
+            Promise.all<void>(this.schema['hooks'].postSave.map((hook: (data: T) => Promise<void>) => hook(createdData)))
+            .then((): void => resolve(createdData))
+            .catch((error: Error): void => reject(error));
+        }
       });
     });
   }
