@@ -1,30 +1,61 @@
-# SQLMongoose
+<div align="center">
+  <img src="https://capsule-render.vercel.app/api?type=waving&height=300&color=gradient&text=SQLMongoose" alt="SQLMongoose Logo" width="200"/>
 
-A SQLite ORM that works like Mongoose, bringing MongoDB/Mongoose syntax to SQLite.
-Join our community: https://discord.gg/hzWuQH869R
+  # SQLMongoose
+  
+  [![npm version](https://img.shields.io/npm/v/sqlmongoose.svg?style=flat-square)](https://www.npmjs.org/package/sqlmongoose)
+  [![install size](https://img.shields.io/bundlephobia/min/sqlmongoose?style=flat-square)](https://packagephobia.com/result?p=sqlmongoose)
+  [![npm downloads](https://img.shields.io/npm/dm/sqlmongoose.svg?style=flat-square)](http://npm-stat.com/charts.html?package=sqlmongoose)
+  [![Discord](https://img.shields.io/discord/1234567890?color=7289da&label=Discord&logo=discord&logoColor=white&style=flat-square)](https://discord.gg/hzWuQH869R)
+  [![GitHub license](https://img.shields.io/github/license/Jersuxs/SQLMongoose?style=flat-square)](https://github.com/Jersuxs/SQLMongoose/blob/main/LICENSE)
 
-## Features
+  <p align="center">
+    🚀 A powerful and elegant SQLite ORM with Mongoose-like syntax
+    <br />
+    <a href="#features">Features</a>
+    ·
+    <a href="#installation">Installation</a>
+    ·
+    <a href="#quick-start">Quick Start</a>
+    ·
+    <a href="https://discord.gg/hzWuQH869R">Discord</a>
+  </p>
+</div>
 
-- 🎯 Mongoose-like Schema definitions
-- 🚀 Simple and intuitive Model API
-- 📦 TypeScript support out of the box
-- 🛡️ Type safety for your database operations
-- 🔍 Familiar query interface (find, findOne)
-- 🎨 Clean and modern API design
-- 🔄 Pre/Post Hooks for save and update operations
-- 🤝 Relationship support with populate
-- ⚡ Advanced querying (gt, lt, like, in, etc.)
-- 📊 Index support
+## 🌟 Features
+
+<table>
+<tr>
+<td>
+
+### Core Features
+- 📝 Mongoose-like Schema definitions
+- 🎯 TypeScript support out of the box
+- 🔄 Automatic table creation
+- 🔍 Powerful query builder
+- 🎨 Clean and intuitive API
+
+</td>
+<td>
+
+### Advanced Features
 - 🔒 Transaction support
-- ✨ Field validation
+- 🎣 Pre/Post Hooks
+- 🤝 Relations & Population
+- 📊 Indexing support
+- ⚡ Connection pooling
 
-## Installation
+</td>
+</tr>
+</table>
+
+## 📦 Installation
 
 ```bash
 npm install sqlmongoose
 ```
 
-## Quick Start
+## 🚀 Quick Start
 
 ```javascript
 const sqlmongoose = require('sqlmongoose');
