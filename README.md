@@ -324,6 +324,150 @@ async function userExample() {
 }
 ```
 
+## JavaScript Examples
+
+### CommonJS Usage
+```javascript
+const { createConnection, Schema, Model } = require('sqlmongoose');
+
+// Create database connection
+const db = createConnection('example.db');
+
+// Define schema
+const userSchema = new Schema({
+  name: { type: 'STRING', required: true },
+  email: { type: 'STRING', unique: true },
+  age: { type: 'NUMBER' },
+  isActive: { type: 'BOOLEAN', default: true }
+});
+
+// Create model
+const UserModel = new Model(db, 'users', userSchema);
+
+// Example usage with Promise chains
+UserModel.create({
+  name: 'John Doe',
+  email: 'john@example.com',
+  age: 30
+})
+  .then(user => console.log('User created:', user))
+  .catch(err => console.error('Error:', err));
+
+// Example with async/await
+async function findUsers() {
+  try {
+    // Find users with advanced queries
+    const users = await UserModel.find({
+      age: { gt: 18, lt: 65 },
+      isActive: true
+    }, {
+      limit: 10,
+      orderBy: { name: 'ASC' }
+    });
+    
+    console.log('Active users:', users);
+
+    // Update users
+    const updated = await UserModel.update(
+      { age: { lt: 18 } },
+      { isActive: false }
+    );
+    console.log('Updated records:', updated);
+
+  } catch (error) {
+    console.error('Error:', error);
+  }
+}
+
+// Transactions example
+async function createUserWithOrder() {
+  const connection = createConnection('store.db');
+  
+  try {
+    await connection.transaction(async (db) => {
+      const UserModel = new Model(db, 'users', userSchema);
+      const OrderModel = new Model(db, 'orders', orderSchema);
+
+      const user = await UserModel.create({
+        name: 'Jane Doe',
+        email: 'jane@example.com'
+      });
+
+      await OrderModel.create({
+        userId: user.id,
+        total: 99.99,
+        status: 'pending'
+      });
+    });
+    console.log('Transaction completed successfully');
+  } catch (error) {
+    console.error('Transaction failed:', error);
+  }
+}
+
+// Hooks example in JavaScript
+userSchema.pre('save', async function(data) {
+  data.createdAt = new Date();
+  if (data.password) {
+    data.password = await bcrypt.hash(data.password, 10);
+  }
+});
+
+// Relationships example
+const orderSchema = new Schema({
+  userId: { type: 'NUMBER', ref: 'users' },
+  total: { type: 'NUMBER' }
+});
+
+// Find orders with populated user data
+OrderModel.find(
+  { total: { gt: 100 } },
+  { populate: ['userId'] }
+)
+  .then(orders => {
+    orders.forEach(order => {
+      console.log(`Order total: ${order.total}`);
+      console.log(`Customer: ${order.userId.name}`);
+    });
+  });
+```
+
+### ES Modules Usage
+```javascript
+import { createConnection, Schema, Model } from 'sqlmongoose';
+
+const db = createConnection('example.db');
+
+const productSchema = new Schema({
+  name: { 
+    type: 'STRING',
+    validate: value => value.length >= 3
+  },
+  price: { 
+    type: 'NUMBER',
+    required: true
+  }
+});
+
+const ProductModel = new Model(db, 'products', productSchema);
+
+// Using top-level await (Node.js 14.8+ or ES modules)
+try {
+  const product = await ProductModel.create({
+    name: 'Test Product',
+    price: 29.99
+  });
+  console.log('Product created:', product);
+  
+  const products = await ProductModel.find({
+    price: { lt: 100 }
+  });
+  console.log('Affordable products:', products);
+} catch (error) {
+  console.error('Error:', error);
+}
+```
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
