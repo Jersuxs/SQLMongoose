@@ -1,27 +1,19 @@
-export interface QueryCondition {
-  [key: string]: {
-    operator: string;
-    value: any;
-  };
-}
+import { Pool } from 'generic-pool';
+import { Database } from 'sqlite3';
 
 export class QueryBuilder<T> {
   private conditions: string[] = [];
   private values: any[] = [];
-  private limitValue?: number;
-  private offsetValue?: number;
-  private orderByValues: { [key: string]: 'ASC' | 'DESC' } = {};
-  private includeFields: string[] = [];
+  private limitValue: number | null = null;
+  private offsetValue: number | null = null;
+  private sortValue: { [key: string]: 'ASC' | 'DESC' } = {};
+  private selectFields: string[] = ['*'];
 
-  constructor(private tableName: string) {}
+  constructor(private pool: Pool<Database>, private tableName: string) {}
 
-  where(condition: Partial<T> | QueryCondition): this {
-    // ...existing query building logic...
-    return this;
-  }
-
-  select(...fields: (keyof T)[]): this {
-    this.includeFields = fields as string[];
+  where(field: keyof T, operator: string, value: any): this {
+    this.conditions.push(`${field as string} ${operator} ?`);
+    this.values.push(value);
     return this;
   }
 
@@ -35,36 +27,48 @@ export class QueryBuilder<T> {
     return this;
   }
 
-  orderBy(field: keyof T, direction: 'ASC' | 'DESC'): this {
-    this.orderByValues[field as string] = direction;
+  sort(field: keyof T, direction: 'ASC' | 'DESC' = 'ASC'): this {
+    this.sortValue[field as string] = direction;
     return this;
   }
 
-  build(): { sql: string; values: any[] } {
-    const fields = this.includeFields.length > 0 
-      ? this.includeFields.join(', ')
-      : '*';
+  select(fields: (keyof T)[]): this {
+    this.selectFields = fields as string[];
+    return this;
+  }
 
-    let sql = `SELECT ${fields} FROM ${this.tableName}`;
+  async execute(): Promise<T[]> {
+    let sql = `SELECT ${this.selectFields.join(', ')} FROM ${this.tableName}`;
 
     if (this.conditions.length > 0) {
       sql += ` WHERE ${this.conditions.join(' AND ')}`;
     }
 
-    if (Object.keys(this.orderByValues).length > 0) {
-      const orderClauses = Object.entries(this.orderByValues)
+    if (Object.keys(this.sortValue).length > 0) {
+      const sortClauses = Object.entries(this.sortValue)
         .map(([field, direction]) => `${field} ${direction}`)
         .join(', ');
-      sql += ` ORDER BY ${orderClauses}`;
+      sql += ` ORDER BY ${sortClauses}`;
     }
 
-    if (this.limitValue !== undefined) {
+    if (this.limitValue !== null) {
       sql += ` LIMIT ${this.limitValue}`;
-      if (this.offsetValue !== undefined) {
-        sql += ` OFFSET ${this.offsetValue}`;
-      }
     }
 
-    return { sql, values: this.values };
+    if (this.offsetValue !== null) {
+      sql += ` OFFSET ${this.offsetValue}`;
+    }
+
+    const client = await this.pool.acquire();
+    try {
+      return await new Promise((resolve, reject) => {
+        client.all(sql, this.values, (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows as T[]);
+        });
+      });
+    } finally {
+      this.pool.release(client);
+    }
   }
 }
