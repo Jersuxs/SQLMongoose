@@ -84,7 +84,9 @@ export class Model<T extends object> {
   }
 
   async findById(id: number): Promise<T | null> {
-    return this.findOne({ id } as Partial<T>);
+    const qb = new QueryBuilder<T>(this.pool, this.tableName).where('id' as keyof T, '=', id).limit(1);
+    const results = await qb.execute();
+    return results[0] || null;
   }
 
   async updateOne(query: Partial<T>, update: Partial<T>): Promise<number> {

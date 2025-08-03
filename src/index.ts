@@ -1,3 +1,4 @@
+import 'reflect-metadata';
 import { Database } from 'sqlite3';
 import { Schema } from './Schema';
 import { Model } from './Model';
