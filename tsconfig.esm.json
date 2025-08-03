@@ -3,6 +3,8 @@
   "compilerOptions": {
     "module": "ES2015",
     "outDir": "./dist/esm",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
     "declaration": false,
     "declarationMap": false
   }
