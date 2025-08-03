@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import 'reflect-metadata';
 import { sqlmongoose } from './index';
 import { DataTypes, Schema, SchemaDefinition } from './Schema';
 
